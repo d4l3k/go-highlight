@@ -1,0 +1,5 @@
+package languages
+import "github.com/d4l3k/go-highlight/registry"
+func init() {
+  registry.Register("xquery", `{"aliases":[0,1],"case_insensitive":false,"lexemes":"/[a-zA-Z\\$][a-zA-Z0-9_:\\-]*/","illegal":"/(proc)|(abstract)|(extends)|(until)|(#)/","keywords":{"keyword":"for let if while then else return where group by xquery encoding versionmodule namespace boundary-space preserve strip default collation base-uri orderingcopy-namespaces order declare import schema namespace function option in allowing emptyat tumbling window sliding window start when only end when previous next stable ascendingdescending empty greatest least some every satisfies switch case typeswitch try catch andor to union intersect instance of treat as castable cast map array delete insert intoreplace value rename copy modify update","literal":"false true xs:string xs:integer element item xs:date xs:datetime xs:float xs:double xs:decimal QName xs:anyURI xs:long xs:int xs:short xs:byte attribute"},"contains":[0,1,2,3,4,5]}`)
+}
