@@ -5,6 +5,7 @@ import (
 	"container/heap"
 	"errors"
 	"io"
+	"log"
 	"regexp"
 	"sort"
 	"strings"
@@ -38,6 +39,7 @@ type highlighter struct {
 	code       string
 	lang       registry.Language
 	highlights []highlight
+	basics     map[string][]string
 }
 
 func makeHighlighter(lang, code string) (highlighter, error) {
@@ -47,19 +49,32 @@ func makeHighlighter(lang, code string) (highlighter, error) {
 	}
 	spew.Dump(langDef)
 
-	return highlighter{code: code, lang: langDef}, nil
+	return highlighter{
+		code: code,
+		lang: langDef,
+		basics: map[string][]string{
+			"keyword":  strings.Split(langDef.Keywords.Keyword, " "),
+			"literal":  strings.Split(langDef.Keywords.Literal, " "),
+			"built_in": strings.Split(langDef.Keywords.BuiltIn, " "),
+		},
+	}, nil
 }
 
 func (h *highlighter) highlight(mode []registry.Contains, start int, end *regexp.Regexp) (int, error) {
-	basic := map[string][]string{}
-	if start == 0 {
-		basic["keyword"] = strings.Split(h.lang.Keywords.Keyword, " ")
-		basic["literal"] = strings.Split(h.lang.Keywords.Literal, " ")
-		basic["built_in"] = strings.Split(h.lang.Keywords.BuiltIn, " ")
-	}
+	root := start == 0
+
 outer:
 	for start < len(h.code) {
 		view := h.code[start:]
+
+		isWordBoundary := start == 0
+		if start > 0 {
+			matched, err := regexp.MatchString("^\\W\\w", h.code[start-1:start+1])
+			if err != nil {
+				return 0, err
+			}
+			isWordBoundary = matched
+		}
 
 		// Check for the end of the previous section.
 		if end != nil && end.MatchString(view) {
@@ -67,16 +82,23 @@ outer:
 		}
 
 		// Highlight basic keywords, literals and built_ins.
-		for typ, words := range basic {
-			for _, word := range words {
-				matched, err := regexp.MatchString("^\\b"+word+"\\b", view)
-				if err != nil {
-					return 0, err
-				}
-				if matched {
-					h.addHighlight(typ, start, start+len(word))
-					start += len(word)
-					continue outer
+		if root && isWordBoundary {
+			for typ, words := range h.basics {
+				for _, word := range words {
+					if len(word) == 0 {
+						continue
+					}
+
+					matched, err := regexp.MatchString("(?i)^"+word+"\\b", view)
+					if err != nil {
+						return 0, err
+					}
+					if matched {
+						h.addHighlight(typ, start, start+len(word))
+						start += len(word)
+						log.Println(word)
+						continue outer
+					}
 				}
 			}
 		}

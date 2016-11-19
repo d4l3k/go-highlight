@@ -6,10 +6,24 @@ import (
 	"testing"
 )
 
+type highlightCase struct {
+	in, out string
+}
+
+func testCases(t *testing.T, lang string, cases []highlightCase) {
+	for i, c := range cases {
+		resp, err := Highlight(lang, c.in)
+		if err != nil {
+			t.Error(err)
+		}
+		if resp != c.out {
+			t.Errorf("%d. Highlight(%q, %q)\n  = %q;\nnot %q", i, lang, c.in, resp, c.out)
+		}
+	}
+}
+
 func TestHighlight(t *testing.T) {
-	cases := []struct {
-		in, out string
-	}{
+	cases := []highlightCase{
 		{
 			`package main`,
 			`<keyword>package</keyword> main`,
@@ -45,15 +59,21 @@ func TestHighlight(t *testing.T) {
 			`<comment>/* </comment><doctag>NOTE:</doctag><comment> test */</comment>`,
 		},
 	}
-	for i, c := range cases {
-		resp, err := Highlight("go", c.in)
-		if err != nil {
-			t.Error(err)
-		}
-		if resp != c.out {
-			t.Errorf("%d. Highlight(\"go\", %q)\n  = %q;\nnot %q", i, c.in, resp, c.out)
-		}
+	testCases(t, "go", cases)
+}
+
+func TestCaseInsensitive(t *testing.T) {
+	cases := []highlightCase{
+		{
+			`If ($True -eq $True) { "duck" }`,
+			`<keyword>If</keyword> (<variable>$True</variable> -eq <variable>$True</variable>) { <string>"duck"</string> }`,
+		},
+		{
+			`iF ($True -eq $True) { "duck" }`,
+			`<keyword>iF</keyword> (<variable>$True</variable> -eq <variable>$True</variable>) { <string>"duck"</string> }`,
+		},
 	}
+	testCases(t, "powershell", cases)
 }
 
 func TestPOIHeap(t *testing.T) {
