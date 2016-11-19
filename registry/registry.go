@@ -35,11 +35,12 @@ type Contains struct {
 	Contains  []Contains `json:"contains"`
 	Variants  []Contains `json:"variants"`
 
-	Begin         string  `json:"begin"`
-	End           string  `json:"end"`
-	BeginKeywords string  `json:"beginKeywords"`
-	ExcludeEnd    bool    `json:"excludeEnd"`
-	Relevance     float64 `json:"relevance"`
+	Begin         string   `json:"begin"`
+	End           string   `json:"end"`
+	BeginKeywords string   `json:"beginKeywords"`
+	Keywords      Keywords `json:"keywords"`
+	ExcludeEnd    bool     `json:"excludeEnd"`
+	Relevance     float64  `json:"relevance"`
 }
 
 func parseLang(def string) (Language, error) {

@@ -5,7 +5,6 @@ import (
 	"container/heap"
 	"errors"
 	"io"
-	"log"
 	"regexp"
 	"sort"
 	"strings"
@@ -35,6 +34,21 @@ type highlight struct {
 	content    string
 }
 
+func parseWords(words string) []string {
+	if len(words) == 0 {
+		return nil
+	}
+	return strings.Split(words, " ")
+}
+
+func parseKeywords(kw registry.Keywords) map[string][]string {
+	return map[string][]string{
+		"keyword":  parseWords(kw.Keyword),
+		"literal":  parseWords(kw.Literal),
+		"built_in": parseWords(kw.BuiltIn),
+	}
+}
+
 type highlighter struct {
 	code       string
 	lang       registry.Language
@@ -50,14 +64,40 @@ func makeHighlighter(lang, code string) (highlighter, error) {
 	spew.Dump(langDef)
 
 	return highlighter{
-		code: code,
-		lang: langDef,
-		basics: map[string][]string{
-			"keyword":  strings.Split(langDef.Keywords.Keyword, " "),
-			"literal":  strings.Split(langDef.Keywords.Literal, " "),
-			"built_in": strings.Split(langDef.Keywords.BuiltIn, " "),
-		},
+		code:   code,
+		lang:   langDef,
+		basics: parseKeywords(langDef.Keywords),
 	}, nil
+}
+
+func (h *highlighter) wordsMatch(view string, words []string) (string, bool, error) {
+	mod := ""
+	if h.lang.CaseInsensitive {
+		mod = "(?i)"
+	}
+	for _, word := range words {
+		matched, err := regexp.MatchString(mod+"^"+word+"\\b", view)
+		if err != nil {
+			return "", false, err
+		}
+		if matched {
+			return word, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+func (h *highlighter) matchKeywords(start *int, view, typ string, words []string) (bool, error) {
+	word, matched, err := h.wordsMatch(view, words)
+	if err != nil {
+		return false, err
+	}
+	if matched {
+		h.addHighlight(typ, *start, *start+len(word))
+		*start += len(word)
+		return true, nil
+	}
+	return false, nil
 }
 
 func (h *highlighter) highlight(mode []registry.Contains, start int, end *regexp.Regexp) (int, error) {
@@ -81,51 +121,57 @@ outer:
 			return start, nil
 		}
 
-		// Highlight basic keywords, literals and built_ins.
-		if root && isWordBoundary {
-			for typ, words := range h.basics {
-				for _, word := range words {
-					if len(word) == 0 {
-						continue
+		for _, c := range mode {
+			// Highlight basic keywords, literals and built_ins.
+			if isWordBoundary {
+				keywords := []map[string][]string{parseKeywords(c.Keywords)}
+				if root {
+					keywords = append(keywords, h.basics)
+				}
+				for _, kw := range keywords {
+					for typ, words := range kw {
+						cont, err := h.matchKeywords(&start, view, typ, words)
+						if err != nil {
+							return 0, err
+						}
+						if cont {
+							continue outer
+						}
 					}
+				}
+			}
 
-					matched, err := regexp.MatchString("(?i)^"+word+"\\b", view)
+			for _, v := range append([]registry.Contains{c}, c.Variants...) {
+				var beginIndex []int
+				if len(v.Begin) > 0 && len(c.ClassName) > 0 {
+					beginRegex, err := regexp.Compile("^" + v.Begin)
+					if err != nil {
+						return 0, err
+					}
+					beginIndex = beginRegex.FindStringIndex(view)
+				} else if isWordBoundary && len(v.BeginKeywords) > 0 {
+					keywords := parseWords(v.BeginKeywords)
+					word, matched, err := h.wordsMatch(view, keywords)
 					if err != nil {
 						return 0, err
 					}
 					if matched {
-						h.addHighlight(typ, start, start+len(word))
-						start += len(word)
-						log.Println(word)
-						continue outer
+						h.addHighlight("keyword", start, start+len(word))
+						beginIndex = []int{0, len(word)}
 					}
-				}
-			}
-		}
-
-		for _, c := range mode {
-			// Skip non class contains. Typically used for boosting relevance.
-			if len(c.ClassName) == 0 {
-				continue
-			}
-
-			for _, v := range append([]registry.Contains{c}, c.Variants...) {
-				if len(v.Begin) == 0 {
+				} else {
 					continue
 				}
 
-				beginRegex, err := regexp.Compile("^" + v.Begin)
-				if err != nil {
-					return 0, err
-				}
-				beginIndex := beginRegex.FindStringIndex(view)
 				if beginIndex == nil {
 					continue
 				}
 
 				// Simple Begin only matches
 				if len(v.End) == 0 {
-					h.addHighlight(c.ClassName, start, start+beginIndex[1])
+					if len(c.ClassName) > 0 {
+						h.addHighlight(c.ClassName, start, start+beginIndex[1])
+					}
 					start += beginIndex[1]
 					continue
 				}
@@ -150,7 +196,9 @@ outer:
 					return 0, errors.New("can't find ending")
 				}
 				newStart += index[1]
-				h.addHighlight(c.ClassName, start, newStart)
+				if len(c.ClassName) > 0 {
+					h.addHighlight(c.ClassName, start, newStart)
+				}
 				start = newStart
 				continue outer
 			}

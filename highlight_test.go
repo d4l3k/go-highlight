@@ -63,7 +63,7 @@ func TestHighlight(t *testing.T) {
 }
 
 func TestCaseInsensitive(t *testing.T) {
-	cases := []highlightCase{
+	insensitiveCases := []highlightCase{
 		{
 			`If ($True -eq $True) { "duck" }`,
 			`<keyword>If</keyword> (<variable>$True</variable> -eq <variable>$True</variable>) { <string>"duck"</string> }`,
@@ -73,7 +73,29 @@ func TestCaseInsensitive(t *testing.T) {
 			`<keyword>iF</keyword> (<variable>$True</variable> -eq <variable>$True</variable>) { <string>"duck"</string> }`,
 		},
 	}
-	testCases(t, "powershell", cases)
+	testCases(t, "powershell", insensitiveCases)
+
+	sensitiveCases := []highlightCase{
+		{
+			`package main`,
+			`<keyword>package</keyword> main`,
+		},
+		{
+			`PACKAGE main`,
+			`PACKAGE main`,
+		},
+	}
+	testCases(t, "go", sensitiveCases)
+}
+
+func TestBeginKeywords(t *testing.T) {
+	cases := []highlightCase{
+		{
+			`select * from duck;`,
+			`<keyword>select</keyword> * <keyword>from</keyword> duck;`,
+		},
+	}
+	testCases(t, "sql", cases)
 }
 
 func TestPOIHeap(t *testing.T) {
