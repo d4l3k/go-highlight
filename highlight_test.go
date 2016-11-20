@@ -95,7 +95,7 @@ func TestCaseInsensitive(t *testing.T) {
 }
 
 func BenchmarkHighlight(b *testing.B) {
-	for _, n := range []int{10, 100, 1000, 10000, 100000} {
+	for _, n := range []int{10, 100, 1000, 10000, 100000, 1000000} {
 		b.Run(fmt.Sprintf("BenchmarkHighlight%dBytes", n), func(b *testing.B) {
 			code := strings.Repeat(" ", n)
 			b.ResetTimer()

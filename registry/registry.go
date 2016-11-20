@@ -134,9 +134,15 @@ func Lookup(name string) (Language, error) {
 	if lang, ok := lookupCache[name]; ok {
 		return lang, nil
 	}
-	lang, ok := languages[name]
+	langDef, ok := languages[name]
 	if !ok {
 		return Language{}, errors.New("can't find language")
 	}
-	return parseLang(lang)
+
+	lang, err := parseLang(langDef)
+	if err != nil {
+		return Language{}, err
+	}
+	lookupCache[name] = lang
+	return lang, nil
 }

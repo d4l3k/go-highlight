@@ -3,7 +3,6 @@ package highlight
 import (
 	"bytes"
 	"container/heap"
-	"errors"
 	"io"
 	"regexp"
 	"sort"
@@ -124,8 +123,11 @@ outer:
 		}
 
 		// Check for the end of the previous section.
-		if end != nil && end.Match(view) {
-			return start, nil
+		if end != nil {
+			index := end.FindIndex(view)
+			if index != nil {
+				return start + index[1], nil
+			}
 		}
 
 		for _, c := range mode {
@@ -187,13 +189,6 @@ outer:
 					return 0, err
 				}
 
-				// Avoid matching start of section.
-				endView := h.code[newStart:]
-				index := v.End.FindIndex(endView)
-				if index == nil {
-					return 0, errors.New("can't find ending")
-				}
-				newStart += index[1]
 				if len(c.ClassName) > 0 {
 					h.addHighlight(c.ClassName, start, newStart)
 				}
