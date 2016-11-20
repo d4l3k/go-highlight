@@ -68,7 +68,7 @@ func TestHighlight(t *testing.T) {
 	testCases(t, "go", cases)
 }
 
-func TestCaseInsensitive(t *testing.T) {
+func TestHighlightCaseInsensitive(t *testing.T) {
 	insensitiveCases := []highlightCase{
 		{
 			`If ($True -eq $True) { "duck" }`,
@@ -92,6 +92,16 @@ func TestCaseInsensitive(t *testing.T) {
 		},
 	}
 	testCases(t, "go", sensitiveCases)
+}
+
+func TestHighlightMultiLine(t *testing.T) {
+	cases := []highlightCase{
+		{
+			"`\n`",
+			"<string>`\n`</string>",
+		},
+	}
+	testCases(t, "go", cases)
 }
 
 func BenchmarkHighlight(b *testing.B) {
