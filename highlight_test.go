@@ -2,7 +2,9 @@ package highlight
 
 import (
 	"container/heap"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -43,6 +45,10 @@ func TestHighlight(t *testing.T) {
 		{
 			`var testfunc`,
 			`<keyword>var</keyword> testfunc`,
+		},
+		{
+			`=append()`,
+			`=<built_in>append</built_in>()`,
 		},
 		{
 			`
@@ -86,6 +92,21 @@ func TestCaseInsensitive(t *testing.T) {
 		},
 	}
 	testCases(t, "go", sensitiveCases)
+}
+
+func BenchmarkHighlight(b *testing.B) {
+	for _, n := range []int{10, 100, 1000, 10000, 100000} {
+		b.Run(fmt.Sprintf("BenchmarkHighlight%dBytes", n), func(b *testing.B) {
+			code := strings.Repeat(" ", n)
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				if _, err := Highlight("go", code); err != nil {
+					b.Error(err)
+				}
+			}
+		})
+	}
 }
 
 func TestBeginKeywords(t *testing.T) {

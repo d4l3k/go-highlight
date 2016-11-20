@@ -8,9 +8,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/d4l3k/go-highlight/registry"
-	"github.com/davecgh/go-spew/spew"
 
 	// Import for language registration side-effect.
 	_ "github.com/d4l3k/go-highlight/languages"
@@ -41,16 +41,19 @@ func parseWords(words string) []string {
 	return strings.Split(words, " ")
 }
 
-func parseKeywords(kw registry.Keywords) map[string][]string {
+func parseKeywords(kw *registry.Keywords) map[string][]string {
+	if kw == nil {
+		return map[string][]string{}
+	}
 	return map[string][]string{
-		"keyword":  parseWords(kw.Keyword),
-		"literal":  parseWords(kw.Literal),
-		"built_in": parseWords(kw.BuiltIn),
+		"keyword":  kw.Keyword,
+		"literal":  kw.Literal,
+		"built_in": kw.BuiltIn,
 	}
 }
 
 type highlighter struct {
-	code       string
+	code       []byte
 	lang       registry.Language
 	highlights []highlight
 	basics     map[string][]string
@@ -61,25 +64,28 @@ func makeHighlighter(lang, code string) (highlighter, error) {
 	if err != nil {
 		return highlighter{}, err
 	}
-	spew.Dump(langDef)
+	//spew.Dump(langDef)
 
 	return highlighter{
-		code:   code,
+		code:   []byte(code),
 		lang:   langDef,
 		basics: parseKeywords(langDef.Keywords),
 	}, nil
 }
 
-func (h *highlighter) wordsMatch(view string, words []string) (string, bool, error) {
-	mod := ""
-	if h.lang.CaseInsensitive {
-		mod = "(?i)"
-	}
+func (h *highlighter) wordsMatch(view []byte, words []string) (string, bool, error) {
 	for _, word := range words {
-		matched, err := regexp.MatchString(mod+"^"+word+"\\b", view)
-		if err != nil {
-			return "", false, err
+		if len(word) > len(view) {
+			continue
 		}
+
+		matched := len(word) == len(view) || !isWord(view[len(word)])
+		if h.lang.CaseInsensitive {
+			matched = matched && bytes.EqualFold([]byte(word), view[:len(word)])
+		} else {
+			matched = matched && bytes.Equal([]byte(word), view[:len(word)])
+		}
+
 		if matched {
 			return word, true, nil
 		}
@@ -87,7 +93,12 @@ func (h *highlighter) wordsMatch(view string, words []string) (string, bool, err
 	return "", false, nil
 }
 
-func (h *highlighter) matchKeywords(start *int, view, typ string, words []string) (bool, error) {
+func isWord(a byte) bool {
+	b := rune(a)
+	return b == '_' || unicode.IsLetter(b) || unicode.IsNumber(b)
+}
+
+func (h *highlighter) matchKeywords(start *int, view []byte, typ string, words []string) (bool, error) {
 	word, matched, err := h.wordsMatch(view, words)
 	if err != nil {
 		return false, err
@@ -100,7 +111,7 @@ func (h *highlighter) matchKeywords(start *int, view, typ string, words []string
 	return false, nil
 }
 
-func (h *highlighter) highlight(mode []registry.Contains, start int, end *regexp.Regexp) (int, error) {
+func (h *highlighter) highlight(mode []*registry.Contains, start int, end *regexp.Regexp) (int, error) {
 	root := start == 0
 
 outer:
@@ -109,22 +120,21 @@ outer:
 
 		isWordBoundary := start == 0
 		if start > 0 {
-			matched, err := regexp.MatchString("^\\W\\w", h.code[start-1:start+1])
-			if err != nil {
-				return 0, err
-			}
-			isWordBoundary = matched
+			isWordBoundary = !isWord(h.code[start-1]) && isWord(h.code[start])
 		}
 
 		// Check for the end of the previous section.
-		if end != nil && end.MatchString(view) {
+		if end != nil && end.Match(view) {
 			return start, nil
 		}
 
 		for _, c := range mode {
 			// Highlight basic keywords, literals and built_ins.
 			if isWordBoundary {
-				keywords := []map[string][]string{parseKeywords(c.Keywords)}
+				keywords := []map[string][]string{}
+				if c.Keywords != nil {
+					keywords = append(keywords, parseKeywords(c.Keywords))
+				}
 				if root {
 					keywords = append(keywords, h.basics)
 				}
@@ -141,17 +151,12 @@ outer:
 				}
 			}
 
-			for _, v := range append([]registry.Contains{c}, c.Variants...) {
+			for _, v := range append([]*registry.Contains{c}, c.Variants...) {
 				var beginIndex []int
-				if len(v.Begin) > 0 && len(c.ClassName) > 0 {
-					beginRegex, err := regexp.Compile("^" + v.Begin)
-					if err != nil {
-						return 0, err
-					}
-					beginIndex = beginRegex.FindStringIndex(view)
+				if v.Begin != nil && len(c.ClassName) > 0 {
+					beginIndex = v.Begin.FindIndex(view)
 				} else if isWordBoundary && len(v.BeginKeywords) > 0 {
-					keywords := parseWords(v.BeginKeywords)
-					word, matched, err := h.wordsMatch(view, keywords)
+					word, matched, err := h.wordsMatch(view, v.BeginKeywords)
 					if err != nil {
 						return 0, err
 					}
@@ -168,7 +173,7 @@ outer:
 				}
 
 				// Simple Begin only matches
-				if len(v.End) == 0 {
+				if v.End == nil {
 					if len(c.ClassName) > 0 {
 						h.addHighlight(c.ClassName, start, start+beginIndex[1])
 					}
@@ -176,22 +181,15 @@ outer:
 					continue
 				}
 
-				// Regex needs to be in multi line mode and match starting at the
-				// beginning of the string.
-				endRegex, err := regexp.Compile(`^(?m:` + v.End + `)`)
-				if err != nil {
-					return 0, err
-				}
-
 				// Highlight subsections.
-				newStart, err := h.highlight(c.Contains, start+beginIndex[1], endRegex)
+				newStart, err := h.highlight(c.Contains, start+beginIndex[1], v.End)
 				if err != nil {
 					return 0, err
 				}
 
 				// Avoid matching start of section.
 				endView := h.code[newStart:]
-				index := endRegex.FindStringIndex(endView)
+				index := v.End.FindIndex(endView)
 				if index == nil {
 					return 0, errors.New("can't find ending")
 				}
@@ -214,7 +212,7 @@ func (h *highlighter) addHighlight(class string, start, end int) {
 		start:   start,
 		end:     end,
 		class:   class,
-		content: h.code[start:end],
+		content: string(h.code[start:end]),
 	})
 }
 
@@ -273,7 +271,7 @@ func (h *highlighter) render(w io.Writer, f func(class string, start bool) strin
 }
 
 func (h *highlighter) renderTest() (string, error) {
-	spew.Dump(h.highlights)
+	//spew.Dump(h.highlights)
 	var buf bytes.Buffer
 	h.render(&buf, func(class string, start bool) string {
 		if start {
