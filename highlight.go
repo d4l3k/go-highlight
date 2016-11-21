@@ -23,16 +23,41 @@ const (
 	BuiltIn = "built_in"
 )
 
-// Highlight highlights a piece of code.
+// Highlight highlights a piece of code in HTML.
 func Highlight(lang, code string) (string, error) {
-	h, err := makeHighlighter(lang, code)
+	h, err := makeAndHighlight(lang, code)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
-	if _, err := h.highlight(h.lang.Contains, 0, nil); err != nil {
+	return h.renderHTML()
+}
+
+// HighlightTerm highlights a piece of code for rendering in the terminal.
+func HighlightTerm(lang, code string) (string, error) {
+	h, err := makeAndHighlight(lang, code)
+	if err != nil {
+		return "", err
+	}
+	return h.renderTerm()
+}
+
+func highlightTest(lang, code string) (string, error) {
+	h, err := makeAndHighlight(lang, code)
+	if err != nil {
 		return "", err
 	}
 	return h.renderTest()
+}
+
+func makeAndHighlight(lang, code string) (highlighter, error) {
+	h, err := makeHighlighter(lang, code)
+	if err != nil {
+		return highlighter{}, err
+	}
+	if _, err := h.highlight(h.lang.Contains, 0, nil); err != nil {
+		return highlighter{}, err
+	}
+	return h, nil
 }
 
 type highlight struct {
@@ -60,6 +85,7 @@ func parseKeywords(kw *registry.Keywords) map[string][]string {
 }
 
 type highlighter struct {
+	langName   string
 	code       []byte
 	lang       registry.Language
 	highlights []highlight
@@ -77,6 +103,7 @@ func makeHighlighter(lang, code string) (highlighter, error) {
 	//spew.Dump(langDef)
 
 	return highlighter{
+		langName:   lang,
 		code:       []byte(code),
 		lang:       langDef,
 		basics:     parseKeywords(langDef.Keywords),
@@ -297,7 +324,32 @@ func (h *highlighter) render(w io.Writer, f func(w io.Writer, class string, star
 }
 
 func (h *highlighter) renderTest() (string, error) {
-	//spew.Dump(h.highlights)
+	var buf bytes.Buffer
+	h.render(&buf, func(w io.Writer, class string, start bool) {
+		if start {
+			fmt.Fprintf(w, "<%s>", class)
+		} else {
+			fmt.Fprintf(w, "</%s>", class)
+		}
+	})
+	return buf.String(), nil
+}
+
+func (h *highlighter) renderHTML() (string, error) {
+	var buf bytes.Buffer
+	buf.Write([]byte(`<div class="highlight"><pre><code>`))
+	h.render(&buf, func(w io.Writer, class string, start bool) {
+		if start {
+			fmt.Fprintf(w, "<span class=\"%s\">", class)
+		} else {
+			fmt.Fprintf(w, "</span>", class)
+		}
+	})
+	buf.Write([]byte(`</code></pre></div>`))
+	return buf.String(), nil
+}
+
+func (h *highlighter) renderTerm() (string, error) {
 	var buf bytes.Buffer
 	h.render(&buf, func(w io.Writer, class string, start bool) {
 		if start {

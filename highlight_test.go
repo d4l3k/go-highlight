@@ -12,7 +12,7 @@ type highlightCase struct {
 
 func testCases(t *testing.T, lang string, cases []highlightCase) {
 	for i, c := range cases {
-		resp, err := Highlight(lang, c.in)
+		resp, err := highlightTest(lang, c.in)
 		if err != nil {
 			t.Error(err)
 		}
