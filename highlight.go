@@ -15,6 +15,13 @@ import (
 	_ "github.com/d4l3k/go-highlight/languages"
 )
 
+// The text highlight classes.
+const (
+	Keyword = "keyword"
+	Literal = "literal"
+	BuiltIn = "built_in"
+)
+
 // Highlight highlights a piece of code.
 func Highlight(lang, code string) (string, error) {
 	h, err := makeHighlighter(lang, code)
@@ -45,9 +52,9 @@ func parseKeywords(kw *registry.Keywords) map[string][]string {
 		return map[string][]string{}
 	}
 	return map[string][]string{
-		"keyword":  kw.Keyword,
-		"literal":  kw.Literal,
-		"built_in": kw.BuiltIn,
+		Keyword: kw.Keyword,
+		Literal: kw.Literal,
+		BuiltIn: kw.BuiltIn,
 	}
 }
 
@@ -275,39 +282,4 @@ func (h *highlighter) renderTest() (string, error) {
 		return "</" + class + ">"
 	})
 	return buf.String(), nil
-}
-
-type poi struct {
-	i     int
-	start bool
-	class string
-}
-
-type poiHeap []poi
-
-func (h poiHeap) Len() int { return len(h) }
-func (h poiHeap) Less(i, j int) bool {
-	if h[i].i == h[j].i {
-		return !h[i].start && h[j].start
-	}
-	return -h[i].i < -h[j].i
-}
-func (h poiHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
-
-func (h *poiHeap) Push(x interface{}) {
-	// Push and Pop use pointer receivers because they modify the slice's length,
-	// not just its contents.
-	*h = append(*h, x.(poi))
-}
-
-func (h *poiHeap) Pop() interface{} {
-	old := *h
-	n := len(old)
-	x := old[n-1]
-	*h = old[0 : n-1]
-	return x
-}
-
-func (h *poiHeap) Peek() poi {
-	return (*h)[0]
 }

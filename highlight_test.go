@@ -1,9 +1,7 @@
 package highlight
 
 import (
-	"container/heap"
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -104,6 +102,16 @@ func TestHighlightMultiLine(t *testing.T) {
 	testCases(t, "go", cases)
 }
 
+func TestBeginKeywords(t *testing.T) {
+	cases := []highlightCase{
+		{
+			`select * from duck;`,
+			`<keyword>select</keyword> * <keyword>from</keyword> duck;`,
+		},
+	}
+	testCases(t, "sql", cases)
+}
+
 func BenchmarkHighlight(b *testing.B) {
 	for _, n := range []int{10, 100, 1000, 10000, 100000, 1000000} {
 		b.Run(fmt.Sprintf("BenchmarkHighlight%dBytes", n), func(b *testing.B) {
@@ -116,40 +124,5 @@ func BenchmarkHighlight(b *testing.B) {
 				}
 			}
 		})
-	}
-}
-
-func TestBeginKeywords(t *testing.T) {
-	cases := []highlightCase{
-		{
-			`select * from duck;`,
-			`<keyword>select</keyword> * <keyword>from</keyword> duck;`,
-		},
-	}
-	testCases(t, "sql", cases)
-}
-
-func TestPOIHeap(t *testing.T) {
-	pois := []poi{
-		{i: 100},
-		{i: 15},
-		{i: 15, start: true},
-		{i: 10},
-		{i: 5},
-	}
-	hp := &poiHeap{}
-	for _, p := range pois {
-		heap.Push(hp, p)
-	}
-	for i, p := range pois {
-		h := hp.Peek()
-		if !reflect.DeepEqual(p, h) {
-			t.Errorf("%d. Peek() expected %+v = %+v", i, p, h)
-		}
-
-		h = heap.Pop(hp).(poi)
-		if !reflect.DeepEqual(p, h) {
-			t.Errorf("%d. Pop() expected %+v = %+v", i, p, h)
-		}
 	}
 }

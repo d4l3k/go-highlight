@@ -15,7 +15,7 @@ func Register(name, json string) {
 	languages[name] = json
 }
 
-// Language ...
+// Language represents a language definition.
 type Language struct {
 	CaseInsensitive bool        `json:"case_insensitive"`
 	Aliases         []string    `json:"aliases"`
@@ -43,7 +43,7 @@ type containsJSON struct {
 	Relevance     float64   `json:"relevance"`
 }
 
-// Keywords ...
+// Keywords represents a set of keywords that should be matched and highlighted.
 type Keywords struct {
 	Keyword []string
 	Literal []string
@@ -71,7 +71,7 @@ func (k *Keywords) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Contains ...
+// Contains represents a subsection that can match different parts of the code.
 type Contains struct {
 	ClassName string
 	Contains  []*Contains
@@ -129,14 +129,19 @@ func parseLang(def string) (Language, error) {
 	return lang, nil
 }
 
-// Lookup ...
+// ErrLanguageNotFound is returned when a requested language is not present in
+// the registry.
+var ErrLanguageNotFound = errors.New("can't find language in registry")
+
+// Lookup finds and returns the parsed Language that has been saved in the
+// registry.
 func Lookup(name string) (Language, error) {
 	if lang, ok := lookupCache[name]; ok {
 		return lang, nil
 	}
 	langDef, ok := languages[name]
 	if !ok {
-		return Language{}, errors.New("can't find language")
+		return Language{}, ErrLanguageNotFound
 	}
 
 	lang, err := parseLang(langDef)
