@@ -3,6 +3,7 @@ package highlight
 import (
 	"bytes"
 	"container/heap"
+	"fmt"
 	"io"
 	"regexp"
 	"sort"
@@ -237,7 +238,7 @@ func (h *highlighter) toPOI() []poi {
 	return pois
 }
 
-func (h *highlighter) render(w io.Writer, f func(class string, start bool) string) {
+func (h *highlighter) render(w io.Writer, f func(w io.Writer, class string, start bool)) {
 	pois := h.toPOI()
 	max := &poiHeap{}
 	i := 0
@@ -249,37 +250,38 @@ func (h *highlighter) render(w io.Writer, f func(class string, start bool) strin
 			}
 			heap.Push(max, p)
 			if max.Peek() == p {
-				w.Write([]byte(h.code[i:p.i]))
+				w.Write(h.code[i:p.i])
 				i = p.i
 				if max.Len() > 1 {
-					w.Write([]byte(f(oldMax.class, false)))
+					f(w, oldMax.class, false)
 				}
-				w.Write([]byte(f(p.class, true)))
+				f(w, p.class, true)
 			}
 		} else {
 			oldMax := max.Peek()
 			if oldMax.class == p.class {
-				w.Write([]byte(h.code[i:p.i]))
+				w.Write(h.code[i:p.i])
 				i = p.i
-				w.Write([]byte(f(p.class, false)))
+				f(w, p.class, false)
 				heap.Pop(max)
 				if max.Len() > 0 {
-					w.Write([]byte(f(max.Peek().class, true)))
+					f(w, max.Peek().class, true)
 				}
 			}
 		}
 	}
-	w.Write([]byte(h.code[i:]))
+	w.Write(h.code[i:])
 }
 
 func (h *highlighter) renderTest() (string, error) {
 	//spew.Dump(h.highlights)
 	var buf bytes.Buffer
-	h.render(&buf, func(class string, start bool) string {
+	h.render(&buf, func(w io.Writer, class string, start bool) {
 		if start {
-			return "<" + class + ">"
+			fmt.Fprintf(w, "<%s>", class)
+		} else {
+			fmt.Fprintf(w, "</%s>", class)
 		}
-		return "</" + class + ">"
 	})
 	return buf.String(), nil
 }
