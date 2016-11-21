@@ -64,6 +64,9 @@ type highlighter struct {
 	lang       registry.Language
 	highlights []highlight
 	basics     map[string][]string
+
+	// indexCache is a cache for FindIndex results.
+	indexCache map[*regexp.Regexp][]int
 }
 
 func makeHighlighter(lang, code string) (highlighter, error) {
@@ -74,9 +77,10 @@ func makeHighlighter(lang, code string) (highlighter, error) {
 	//spew.Dump(langDef)
 
 	return highlighter{
-		code:   []byte(code),
-		lang:   langDef,
-		basics: parseKeywords(langDef.Keywords),
+		code:       []byte(code),
+		lang:       langDef,
+		basics:     parseKeywords(langDef.Keywords),
+		indexCache: map[*regexp.Regexp][]int{},
 	}, nil
 }
 
@@ -116,6 +120,25 @@ func (h *highlighter) matchKeywords(start *int, view []byte, typ string, words [
 		return true, nil
 	}
 	return false, nil
+}
+
+// findIndex uses the index cache to avoid doing numerous regex lookups.
+func (h *highlighter) findIndex(r *regexp.Regexp, view []byte, start int) []int {
+	idx, ok := h.indexCache[r]
+	if ok {
+		if idx == nil {
+			return nil
+		} else if idx[0] >= start {
+			return []int{idx[0] - start, idx[1] - start}
+		}
+	}
+	idx = r.FindIndex(view)
+	if idx == nil {
+		h.indexCache[r] = nil
+	} else {
+		h.indexCache[r] = []int{idx[0] + start, idx[1] + start}
+	}
+	return idx
 }
 
 func (h *highlighter) highlight(mode []*registry.Contains, start int, end *regexp.Regexp) (int, error) {
@@ -164,7 +187,8 @@ outer:
 			for _, v := range append([]*registry.Contains{c}, c.Variants...) {
 				var beginIndex []int
 				if v.Begin != nil && len(c.ClassName) > 0 {
-					beginIndex = v.Begin.FindIndex(view)
+					//beginIndex = v.Begin.FindIndex(view)
+					beginIndex = h.findIndex(v.Begin, view, start)
 				} else if isWordBoundary && len(v.BeginKeywords) > 0 {
 					word, matched, err := h.wordsMatch(view, v.BeginKeywords)
 					if err != nil {
@@ -178,7 +202,7 @@ outer:
 					continue
 				}
 
-				if beginIndex == nil {
+				if beginIndex == nil || beginIndex[0] != 0 {
 					continue
 				}
 

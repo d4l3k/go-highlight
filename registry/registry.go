@@ -98,7 +98,7 @@ func (c *Contains) UnmarshalJSON(b []byte) error {
 	c.Variants = con.Variants
 
 	if len(con.Begin) > 0 {
-		c.Begin, err = regexp.Compile("^" + con.Begin)
+		c.Begin, err = regexp.Compile(con.Begin)
 		if err != nil {
 			return err
 		}
