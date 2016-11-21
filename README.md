@@ -1,4 +1,4 @@
-# go-highlight
+# go-highlight [![GoDoc](https://godoc.org/github.com/d4l3k/go-highlight?status.svg)](https://godoc.org/github.com/d4l3k/go-highlight) [![Build Status](https://travis-ci.org/d4l3k/go-highlight.svg?branch=master)](https://travis-ci.org/d4l3k/go-highlight)
 
 A Go (Golang) code syntax highlighting library. It uses automatically converted
 [highlight.js](https://github.com/isagalaev/highlight.js) language definitions.
