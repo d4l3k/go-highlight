@@ -8,7 +8,7 @@ import (
 func TestRegistry(t *testing.T) {
 	name := "test"
 	json := `{"aliases": ["test"]}`
-	Register(name, json)
+	Register([]string{name}, json)
 
 	if jsonOut := languages[name]; jsonOut != json {
 		t.Fatalf("Register(%q, %q); languages[%q] = %q; not %q", name, json, name, jsonOut, json)
