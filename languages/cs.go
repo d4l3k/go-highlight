@@ -1,5 +1,0 @@
-package languages
-import "github.com/d4l3k/go-highlight/registry"
-func init() {
-  registry.Register("cs", `{"aliases":[0],"keywords":{"keyword":"abstract as base bool break byte case catch char checked const continue decimal default delegate do double else enum event explicit extern finally fixed float for foreach goto if implicit in int interface internal is lock long object operator out override params private protected public readonly ref sbyte sealed short sizeof stackalloc static string struct switch this try typeof uint ulong unchecked unsafe ushort using virtual void volatile while nameof add alias ascending async await by descending dynamic equals from get global group into join let on orderby partial remove select set value var where yield","literal":"null false true"},"illegal":"/::/","contains":[0,1,2,3,4,5,6,7,8,9]}`)
-}

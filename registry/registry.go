@@ -11,8 +11,10 @@ var languages = map[string]string{}
 var lookupCache = map[string]Language{}
 
 // Register registers a specific language with the highlighter.
-func Register(name, json string) {
-	languages[name] = json
+func Register(names []string, json string) {
+	for _, name := range names {
+		languages[name] = json
+	}
 }
 
 // Language represents a language definition.
@@ -107,7 +109,7 @@ func (c *Contains) UnmarshalJSON(b []byte) error {
 	if len(con.End) > 0 {
 		// Regex needs to be in multi line mode and match starting at the
 		// beginning of the string.
-		c.End, err = regexp.Compile(`^(?m:` + con.End + `)`)
+		c.End, err = regexp.Compile(`(?m:` + con.End + `)`)
 		if err != nil {
 			return err
 		}

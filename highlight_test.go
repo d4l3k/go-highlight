@@ -112,8 +112,23 @@ func TestBeginKeywords(t *testing.T) {
 	testCases(t, "sql", cases)
 }
 
+func TestAliases(t *testing.T) {
+	cases := []highlightCase{
+		{
+			`package main`,
+			`<keyword>package</keyword> main`,
+		},
+	}
+
+	for _, lang := range []string{"go", "golang"} {
+		testCases(t, lang, cases)
+	}
+}
+
 func BenchmarkHighlight(b *testing.B) {
-	for _, n := range []int{10, 100, 1000, 10000, 100000, 1000000} {
+	n := []int{10, 100, 1000, 10000, 100000, 1000000}
+
+	for _, n := range n {
 		b.Run(fmt.Sprintf("BenchmarkHighlight%dBytes", n), func(b *testing.B) {
 			code := strings.Repeat(" ", n)
 			b.ResetTimer()

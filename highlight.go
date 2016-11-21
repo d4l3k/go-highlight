@@ -155,8 +155,8 @@ outer:
 
 		// Check for the end of the previous section.
 		if end != nil {
-			index := end.FindIndex(view)
-			if index != nil {
+			index := h.findIndex(end, view, start)
+			if index != nil && index[0] == 0 {
 				return start + index[1], nil
 			}
 		}
@@ -187,7 +187,6 @@ outer:
 			for _, v := range append([]*registry.Contains{c}, c.Variants...) {
 				var beginIndex []int
 				if v.Begin != nil && len(c.ClassName) > 0 {
-					//beginIndex = v.Begin.FindIndex(view)
 					beginIndex = h.findIndex(v.Begin, view, start)
 				} else if isWordBoundary && len(v.BeginKeywords) > 0 {
 					word, matched, err := h.wordsMatch(view, v.BeginKeywords)

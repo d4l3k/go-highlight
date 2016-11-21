@@ -4,6 +4,10 @@ const path = require('path');
 
 const dir = './node_modules/highlight.js/lib/languages/';
 
+function goArray(strings) {
+  return "[]string{"+strings.map(a => JSON.stringify(a)).join(", ")+"}";
+}
+
 function cleanRegex(obj, parents) {
   if (!parents) {
     parents = [];
@@ -27,6 +31,7 @@ fs.readdir(dir, (err, files) => {
     fs.readFile(p, (err, data) => {
       if (err) throw err;
       const def = cleanRegex(eval(data.toString())(hljs));
+      const aliases = [lang].concat(def.aliases);
       console.log("Language:", lang);
       try {
         const json = JSON.stringify(def).replace(/`/g, "`+\"`\"+`");
@@ -34,7 +39,7 @@ fs.readdir(dir, (err, files) => {
 `package languages
 import "github.com/d4l3k/go-highlight/registry"
 func init() {
-  registry.Register("${lang}", \`${json}\`)
+  registry.Register(${goArray(aliases)}, \`${json}\`)
 }`, (err) => {
               if (err) throw err;
             });
