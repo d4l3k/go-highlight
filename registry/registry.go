@@ -79,8 +79,8 @@ type Contains struct {
 	Contains  []*Contains
 	Variants  []*Contains
 
-	Begin         *regexp.Regexp
-	End           *regexp.Regexp
+	Begin         Finder
+	End           Finder
 	BeginKeywords []string
 	Keywords      *Keywords
 	ExcludeEnd    bool
@@ -100,7 +100,7 @@ func (c *Contains) UnmarshalJSON(b []byte) error {
 	c.Variants = con.Variants
 
 	if len(con.Begin) > 0 {
-		c.Begin, err = regexp.Compile(con.Begin)
+		c.Begin, err = finderCompile(con.Begin, "")
 		if err != nil {
 			return err
 		}

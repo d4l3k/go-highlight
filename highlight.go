@@ -5,7 +5,6 @@ import (
 	"container/heap"
 	"fmt"
 	"io"
-	"regexp"
 	"sort"
 	"strings"
 	"unicode"
@@ -92,7 +91,7 @@ type highlighter struct {
 	basics     map[string][]string
 
 	// indexCache is a cache for FindIndex results.
-	indexCache map[*regexp.Regexp][]int
+	indexCache map[registry.Finder][]int
 }
 
 func makeHighlighter(lang, code string) (highlighter, error) {
@@ -107,7 +106,7 @@ func makeHighlighter(lang, code string) (highlighter, error) {
 		code:       []byte(code),
 		lang:       langDef,
 		basics:     parseKeywords(langDef.Keywords),
-		indexCache: map[*regexp.Regexp][]int{},
+		indexCache: map[registry.Finder][]int{},
 	}, nil
 }
 
@@ -150,7 +149,7 @@ func (h *highlighter) matchKeywords(start *int, view []byte, typ string, words [
 }
 
 // findIndex uses the index cache to avoid doing numerous regex lookups.
-func (h *highlighter) findIndex(r *regexp.Regexp, view []byte, start int) []int {
+func (h *highlighter) findIndex(r registry.Finder, view []byte, start int) []int {
 	idx, ok := h.indexCache[r]
 	if ok {
 		if idx == nil {
@@ -168,7 +167,7 @@ func (h *highlighter) findIndex(r *regexp.Regexp, view []byte, start int) []int 
 	return idx
 }
 
-func (h *highlighter) highlight(mode []*registry.Contains, start int, end *regexp.Regexp) (int, error) {
+func (h *highlighter) highlight(mode []*registry.Contains, start int, end registry.Finder) (int, error) {
 	root := start == 0
 
 outer:
@@ -342,7 +341,7 @@ func (h *highlighter) renderHTML() (string, error) {
 		if start {
 			fmt.Fprintf(w, "<span class=\"%s\">", class)
 		} else {
-			fmt.Fprintf(w, "</span>", class)
+			fmt.Fprintf(w, "</span>")
 		}
 	})
 	buf.Write([]byte(`</code></pre></div>`))
