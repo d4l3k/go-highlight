@@ -10,7 +10,7 @@ func TestRegistry(t *testing.T) {
 	json := `{"aliases": ["test"]}`
 	Register([]string{name}, json)
 
-	if jsonOut := languages[name]; jsonOut != json {
+	if jsonOut := languagesMu.defs[name].body; jsonOut != json {
 		t.Fatalf("Register(%q, %q); languages[%q] = %q; not %q", name, json, name, jsonOut, json)
 	}
 

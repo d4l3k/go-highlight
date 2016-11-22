@@ -5,16 +5,49 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"sync"
 )
 
-var languages = map[string]string{}
-var lookupCache = map[string]Language{}
+var languagesMu = struct {
+	sync.RWMutex
+
+	defs  map[string]*unparsedLanguage
+	cache map[string]Language
+	names []string
+}{
+	defs:  map[string]*unparsedLanguage{},
+	cache: map[string]Language{},
+}
 
 // Register registers a specific language with the highlighter.
 func Register(names []string, json string) {
-	for _, name := range names {
-		languages[name] = json
+	lang := &unparsedLanguage{
+		name:    names[0],
+		aliases: names[1:],
+		body:    json,
 	}
+
+	languagesMu.Lock()
+	defer languagesMu.Unlock()
+
+	languagesMu.names = append(languagesMu.names, lang.name)
+	for _, name := range names {
+		languagesMu.defs[name] = lang
+	}
+}
+
+// Languages returns an slice of all the language names.
+func Languages() []string {
+	languagesMu.RLock()
+	defer languagesMu.RUnlock()
+
+	return languagesMu.names
+}
+
+type unparsedLanguage struct {
+	name    string
+	aliases []string
+	body    string
 }
 
 // Language represents a language definition.
@@ -138,18 +171,26 @@ var ErrLanguageNotFound = errors.New("can't find language in registry")
 // Lookup finds and returns the parsed Language that has been saved in the
 // registry.
 func Lookup(name string) (Language, error) {
-	if lang, ok := lookupCache[name]; ok {
+	languagesMu.RLock()
+	lang, ok := languagesMu.cache[name]
+	if ok {
+		languagesMu.RUnlock()
 		return lang, nil
 	}
-	langDef, ok := languages[name]
+	langDef, ok := languagesMu.defs[name]
+	languagesMu.RUnlock()
 	if !ok {
 		return Language{}, ErrLanguageNotFound
 	}
 
-	lang, err := parseLang(langDef)
+	lang, err := parseLang(langDef.body)
 	if err != nil {
 		return Language{}, err
 	}
-	lookupCache[name] = lang
+
+	languagesMu.Lock()
+	defer languagesMu.Unlock()
+
+	languagesMu.cache[name] = lang
 	return lang, nil
 }
