@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -51,9 +50,9 @@ func main() {
 		highlightFunc = highlight.HTML
 	}
 
-	highlighted, err := highlightFunc(*lang, string(bytes))
+	highlighted, err := highlightFunc(*lang, bytes)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Fprintf(color.Output, highlighted)
+	color.Output.Write(highlighted)
 }

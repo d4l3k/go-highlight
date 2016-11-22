@@ -8,15 +8,12 @@ import (
 )
 
 // Term highlights a piece of code for rendering in the terminal.
-func Term(lang, code string) (string, error) {
+func Term(lang string, code []byte) ([]byte, error) {
 	h, err := makeAndHighlight(lang, code)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return h.renderTerm()
-}
 
-func (h *highlighter) renderTerm() (string, error) {
 	var buf bytes.Buffer
 	h.render(&buf, func(w io.Writer, class string, body []byte) {
 		color, ok := termColors[class]
@@ -25,7 +22,7 @@ func (h *highlighter) renderTerm() (string, error) {
 		}
 		w.Write([]byte(color("%s", body)))
 	})
-	return buf.String(), nil
+	return buf.Bytes(), nil
 }
 
 // Theme borrowed from Felix Frederick Becker

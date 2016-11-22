@@ -8,15 +8,12 @@ import (
 )
 
 // HTML highlights a piece of code in HTML.
-func HTML(lang, code string) (string, error) {
+func HTML(lang string, code []byte) ([]byte, error) {
 	h, err := makeAndHighlight(lang, code)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return h.renderHTML()
-}
 
-func (h *highlighter) renderHTML() (string, error) {
 	var buf bytes.Buffer
 	buf.Write([]byte(`<div class="highlight"><pre><code>`))
 	h.render(&buf, func(w io.Writer, class string, body []byte) {
@@ -28,5 +25,5 @@ func (h *highlighter) renderHTML() (string, error) {
 		}
 	})
 	buf.Write([]byte(`</code></pre></div>`))
-	return buf.String(), nil
+	return buf.Bytes(), nil
 }

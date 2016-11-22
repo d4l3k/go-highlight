@@ -12,11 +12,11 @@ type highlightCase struct {
 
 func testCases(t *testing.T, lang string, cases []highlightCase) {
 	for i, c := range cases {
-		resp, err := highlightTest(lang, c.in)
+		resp, err := highlightTest(lang, []byte(c.in))
 		if err != nil {
 			t.Error(err)
 		}
-		if resp != c.out {
+		if string(resp) != c.out {
 			t.Errorf("%d. Highlight(%q, %q)\n  = %q;\nnot %q", i, lang, c.in, resp, c.out)
 		}
 	}
@@ -134,7 +134,7 @@ func BenchmarkHighlight(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				if _, err := HTML("go", code); err != nil {
+				if _, err := HTML("go", []byte(code)); err != nil {
 					b.Error(err)
 				}
 			}

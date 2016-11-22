@@ -22,7 +22,7 @@ const (
 	BuiltIn = "built_in"
 )
 
-func makeAndHighlight(lang, code string) (highlighter, error) {
+func makeAndHighlight(lang string, code []byte) (highlighter, error) {
 	h, err := makeHighlighter(lang, code)
 	if err != nil {
 		return highlighter{}, err
@@ -68,12 +68,11 @@ type highlighter struct {
 	indexCache map[*regexp.Regexp][]int
 }
 
-func makeHighlighter(lang, code string) (highlighter, error) {
+func makeHighlighter(lang string, code []byte) (highlighter, error) {
 	langDef, err := registry.Lookup(lang)
 	if err != nil {
 		return highlighter{}, err
 	}
-	//spew.Dump(langDef)
 
 	return highlighter{
 		langName:   lang,
