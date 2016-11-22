@@ -3,7 +3,6 @@ package highlight
 import (
 	"bytes"
 	"container/heap"
-	"fmt"
 	"io"
 	"regexp"
 	"sort"
@@ -22,32 +21,6 @@ const (
 	Literal = "literal"
 	BuiltIn = "built_in"
 )
-
-// Highlight highlights a piece of code in HTML.
-func Highlight(lang, code string) (string, error) {
-	h, err := makeAndHighlight(lang, code)
-	if err != nil {
-		return "", err
-	}
-	return h.renderHTML()
-}
-
-// HighlightTerm highlights a piece of code for rendering in the terminal.
-func HighlightTerm(lang, code string) (string, error) {
-	h, err := makeAndHighlight(lang, code)
-	if err != nil {
-		return "", err
-	}
-	return h.renderTerm()
-}
-
-func highlightTest(lang, code string) (string, error) {
-	h, err := makeAndHighlight(lang, code)
-	if err != nil {
-		return "", err
-	}
-	return h.renderTest()
-}
 
 func makeAndHighlight(lang, code string) (highlighter, error) {
 	h, err := makeHighlighter(lang, code)
@@ -288,7 +261,7 @@ func (h *highlighter) toPOI() []poi {
 	return pois
 }
 
-func (h *highlighter) render(w io.Writer, f func(w io.Writer, class string, start bool)) {
+func (h *highlighter) render(w io.Writer, f func(w io.Writer, class string, body []byte)) {
 	pois := h.toPOI()
 	max := &poiHeap{}
 	i := 0
@@ -300,63 +273,21 @@ func (h *highlighter) render(w io.Writer, f func(w io.Writer, class string, star
 			}
 			heap.Push(max, p)
 			if max.Peek() == p {
-				w.Write(h.code[i:p.i])
-				i = p.i
+				class := ""
 				if max.Len() > 1 {
-					f(w, oldMax.class, false)
+					class = oldMax.class
 				}
-				f(w, p.class, true)
+				f(w, class, h.code[i:p.i])
+				i = p.i
 			}
 		} else {
 			oldMax := max.Peek()
 			if oldMax.class == p.class {
-				w.Write(h.code[i:p.i])
+				f(w, p.class, h.code[i:p.i])
 				i = p.i
-				f(w, p.class, false)
 				heap.Pop(max)
-				if max.Len() > 0 {
-					f(w, max.Peek().class, true)
-				}
 			}
 		}
 	}
-	w.Write(h.code[i:])
-}
-
-func (h *highlighter) renderTest() (string, error) {
-	var buf bytes.Buffer
-	h.render(&buf, func(w io.Writer, class string, start bool) {
-		if start {
-			fmt.Fprintf(w, "<%s>", class)
-		} else {
-			fmt.Fprintf(w, "</%s>", class)
-		}
-	})
-	return buf.String(), nil
-}
-
-func (h *highlighter) renderHTML() (string, error) {
-	var buf bytes.Buffer
-	buf.Write([]byte(`<div class="highlight"><pre><code>`))
-	h.render(&buf, func(w io.Writer, class string, start bool) {
-		if start {
-			fmt.Fprintf(w, "<span class=\"%s\">", class)
-		} else {
-			fmt.Fprintf(w, "</span>", class)
-		}
-	})
-	buf.Write([]byte(`</code></pre></div>`))
-	return buf.String(), nil
-}
-
-func (h *highlighter) renderTerm() (string, error) {
-	var buf bytes.Buffer
-	h.render(&buf, func(w io.Writer, class string, start bool) {
-		if start {
-			fmt.Fprintf(w, "<%s>", class)
-		} else {
-			fmt.Fprintf(w, "</%s>", class)
-		}
-	})
-	return buf.String(), nil
+	f(w, "", h.code[i:])
 }

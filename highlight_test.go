@@ -134,7 +134,7 @@ func BenchmarkHighlight(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				if _, err := Highlight("go", code); err != nil {
+				if _, err := HTML("go", code); err != nil {
 					b.Error(err)
 				}
 			}
