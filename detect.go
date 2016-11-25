@@ -1,7 +1,6 @@
 package highlight
 
 import (
-	"log"
 	"sync"
 
 	"github.com/d4l3k/go-highlight/registry"
@@ -15,17 +14,15 @@ func Detect(code []byte) (string, error) {
 	languageChan := make(chan string)
 	type result struct {
 		lang  string
-		count int
+		score float64
 		err   error
 	}
 	resultChan := make(chan result)
 
 	go func() {
-		for i, lang := range registry.Languages() {
+		for _, lang := range registry.Languages() {
 			languageChan <- lang
-			log.Printf("processed %d: %s", i, lang)
 		}
-		log.Printf("done")
 		close(languageChan)
 	}()
 
@@ -36,7 +33,21 @@ func Detect(code []byte) (string, error) {
 		go func() {
 			for l := range languageChan {
 				h, err := makeAndHighlight(l, code)
-				resultChan <- result{l, len(h.highlights), err}
+				result := result{l, 0, err}
+
+				for _, h := range h.highlights {
+					if h.start == h.end {
+						continue
+					}
+
+					if h.contains != nil {
+						result.score += h.contains.Relevance
+					} else {
+						result.score++
+					}
+				}
+
+				resultChan <- result
 			}
 			wg.Done()
 		}()
@@ -49,16 +60,16 @@ func Detect(code []byte) (string, error) {
 
 	var err error
 	var bestLang string
-	var bestLangVal int
+	var bestLangVal float64
 	for res := range resultChan {
 		if res.err != nil {
 			err = res.err
 			continue
 		}
 
-		if res.count > bestLangVal {
+		if res.score > bestLangVal {
 			bestLang = res.lang
-			bestLangVal = res.count
+			bestLangVal = res.score
 		}
 	}
 
