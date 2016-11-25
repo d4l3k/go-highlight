@@ -229,7 +229,7 @@ outer:
 		}
 		start++
 	}
-	return start - 1, nil
+	return start, nil
 }
 
 func (h *highlighter) addHighlight(class string, start, end int) {
