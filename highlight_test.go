@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/d4l3k/go-highlight/registry"
 )
 
 type highlightCase struct {
@@ -122,6 +124,16 @@ func TestAliases(t *testing.T) {
 
 	for _, lang := range []string{"go", "golang"} {
 		testCases(t, lang, cases)
+	}
+}
+
+func TestLanguages(t *testing.T) {
+	code := `package main`
+	for _, lang := range registry.Languages() {
+		_, err := highlightTest(lang, []byte(code))
+		if err != nil {
+			t.Errorf("%s: error: %+v", lang, err)
+		}
 	}
 }
 
