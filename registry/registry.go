@@ -2,10 +2,11 @@ package registry
 
 import (
 	"encoding/json"
-	"errors"
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/pkg/errors"
 )
 
 var languagesMu = struct {
@@ -65,17 +66,39 @@ type keywordsJSON struct {
 	BuiltIn string `json:"built_in"`
 }
 
-type containsJSON struct {
-	ClassName string      `json:"className"`
-	Contains  []*Contains `json:"contains"`
-	Variants  []*Contains `json:"variants"`
+func parseContainsRaw(parent *Contains, cs []json.RawMessage) ([]*Contains, error) {
+	final := make([]*Contains, len(cs))
+	for i, cm := range cs {
+		var c Contains
+		if err := json.Unmarshal(cm, &c); err != nil {
+			var s string
+			if err2 := json.Unmarshal(cm, &s); err2 != nil {
+				return nil, errors.Wrap(err, err.Error())
+			}
+			if s == "self" {
+				final[i] = parent
+				continue
+			} else {
+				return nil, err
+			}
+		}
+		final[i] = &c
+	}
+	return final, nil
+}
 
-	Begin         string    `json:"begin"`
-	End           string    `json:"end"`
-	BeginKeywords string    `json:"beginKeywords"`
-	Keywords      *Keywords `json:"keywords"`
-	ExcludeEnd    bool      `json:"excludeEnd"`
-	Relevance     float64   `json:"relevance"`
+type containsJSON struct {
+	ClassName string            `json:"className"`
+	Contains  []json.RawMessage `json:"contains"`
+	Variants  []json.RawMessage `json:"variants"`
+
+	Begin          string    `json:"begin"`
+	BeginLookahead string    `json:"beginLookahead"`
+	End            string    `json:"end"`
+	BeginKeywords  string    `json:"beginKeywords"`
+	Keywords       *Keywords `json:"keywords"`
+	ExcludeEnd     bool      `json:"excludeEnd"`
+	Relevance      float64   `json:"relevance"`
 }
 
 // Keywords represents a set of keywords that should be matched and highlighted.
@@ -96,7 +119,10 @@ func parseWords(words string) []string {
 func (k *Keywords) UnmarshalJSON(b []byte) error {
 	var kw keywordsJSON
 	if err := json.Unmarshal(b, &kw); err != nil {
-		return err
+		// Unmarshalling failed. Try unmarshalling into string.
+		if err := json.Unmarshal(b, &kw.Keyword); err != nil {
+			return errors.Wrap(err, "Keywords UnmarshalJSON")
+		}
 	}
 
 	k.Keyword = parseWords(kw.Keyword)
@@ -112,12 +138,13 @@ type Contains struct {
 	Contains  []*Contains
 	Variants  []*Contains
 
-	Begin         *regexp.Regexp
-	End           *regexp.Regexp
-	BeginKeywords []string
-	Keywords      *Keywords
-	ExcludeEnd    bool
-	Relevance     float64
+	Begin          *regexp.Regexp
+	BeginLookahead *regexp.Regexp
+	End            *regexp.Regexp
+	BeginKeywords  []string
+	Keywords       *Keywords
+	ExcludeEnd     bool
+	Relevance      float64
 }
 
 // UnmarshalJSON unmarshals.
@@ -125,15 +152,29 @@ func (c *Contains) UnmarshalJSON(b []byte) error {
 	var con containsJSON
 	err := json.Unmarshal(b, &con)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "Contains UnmarshalJSON(%s)", b)
 	}
 
 	c.ClassName = con.ClassName
-	c.Contains = con.Contains
-	c.Variants = con.Variants
+
+	c.Contains, err = parseContainsRaw(c, con.Contains)
+	if err != nil {
+		return err
+	}
+	c.Variants, err = parseContainsRaw(c, con.Variants)
+	if err != nil {
+		return err
+	}
 
 	if len(con.Begin) > 0 {
 		c.Begin, err = regexp.Compile(con.Begin)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(con.BeginLookahead) > 0 {
+		c.BeginLookahead, err = regexp.Compile(con.BeginLookahead)
 		if err != nil {
 			return err
 		}
@@ -185,7 +226,7 @@ func Lookup(name string) (Language, error) {
 
 	lang, err := parseLang(langDef.body)
 	if err != nil {
-		return Language{}, err
+		return Language{}, errors.Wrapf(err, "failed to parse %s", name)
 	}
 
 	languagesMu.Lock()
