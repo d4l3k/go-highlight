@@ -16,9 +16,25 @@ function cleanRegex(obj, parents) {
   for (let prop in obj) {
     const val = obj[prop];
     if (val instanceof RegExp) {
-      obj[prop] = val.source;
+      // Need to call JSON.parse to correctly parse unicode escape sequences in
+      // the regexps.
+      let regexp = val.source;
+      while (true) {
+        const matches = regexp.match(/\\u[0-9A-Fa-f]{4}/)
+        if (!matches) {
+          break;
+        }
+        const match = matches[0];
+        regexp = regexp.replace(match, JSON.parse('"'+match+'"'));
+      }
+      obj[prop] = regexp;
     } else if (val === Object(val) && parents.indexOf(val) === -1) {
       obj[prop] = cleanRegex(val, parents);
+    }
+
+    // Hack to fix edge case where there should be no end.
+    if (prop == "end" && val === false) {
+      obj[prop] = ".^";
     }
   }
   return obj;
