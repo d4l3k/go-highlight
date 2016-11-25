@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"container/heap"
 	"io"
-	"regexp"
 	"sort"
 	"strings"
 	"unicode"
 
 	"github.com/d4l3k/go-highlight/registry"
+	pcre "github.com/gijsbers/go-pcre"
 
 	// Import for language registration side-effect.
 	_ "github.com/d4l3k/go-highlight/languages"
@@ -36,7 +36,7 @@ func makeAndHighlight(lang string, code []byte) (highlighter, error) {
 type highlight struct {
 	start, end int
 	class      string
-	content    string
+	contains   *registry.Contains
 }
 
 func parseWords(words string) []string {
@@ -65,7 +65,7 @@ type highlighter struct {
 	basics     map[string][]string
 
 	// indexCache is a cache for FindIndex results.
-	indexCache map[*regexp.Regexp][]int
+	indexCache map[*pcre.Regexp][]int
 }
 
 func makeHighlighter(lang string, code []byte) (highlighter, error) {
@@ -79,7 +79,7 @@ func makeHighlighter(lang string, code []byte) (highlighter, error) {
 		code:       []byte(code),
 		lang:       langDef,
 		basics:     parseKeywords(langDef.Keywords),
-		indexCache: map[*regexp.Regexp][]int{},
+		indexCache: map[*pcre.Regexp][]int{},
 	}, nil
 }
 
@@ -114,7 +114,7 @@ func (h *highlighter) matchKeywords(start *int, view []byte, typ string, words [
 		return false, err
 	}
 	if matched {
-		h.addHighlight(typ, *start, *start+len(word))
+		h.addHighlight(typ, *start, *start+len(word), nil)
 		*start += len(word)
 		return true, nil
 	}
@@ -122,7 +122,7 @@ func (h *highlighter) matchKeywords(start *int, view []byte, typ string, words [
 }
 
 // findIndex uses the index cache to avoid doing numerous regex lookups.
-func (h *highlighter) findIndex(r *regexp.Regexp, view []byte, start int) []int {
+func (h *highlighter) findIndex(r *pcre.Regexp, view []byte, start int) []int {
 	idx, ok := h.indexCache[r]
 	if ok {
 		if idx == nil {
@@ -131,7 +131,7 @@ func (h *highlighter) findIndex(r *regexp.Regexp, view []byte, start int) []int 
 			return []int{idx[0] - start, idx[1] - start}
 		}
 	}
-	idx = r.FindIndex(view)
+	idx = r.FindIndex(view, 0)
 	if idx == nil {
 		h.indexCache[r] = nil
 	} else {
@@ -140,7 +140,7 @@ func (h *highlighter) findIndex(r *regexp.Regexp, view []byte, start int) []int 
 	return idx
 }
 
-func (h *highlighter) highlight(mode []*registry.Contains, start int, end *regexp.Regexp) (int, error) {
+func (h *highlighter) highlight(mode []*registry.Contains, start int, end *pcre.Regexp) (int, error) {
 	root := start == 0
 
 outer:
@@ -193,7 +193,7 @@ outer:
 						return 0, err
 					}
 					if matched {
-						h.addHighlight("keyword", start, start+len(word))
+						h.addHighlight("keyword", start, start+len(word), nil)
 						beginIndex = []int{0, len(word)}
 					}
 				} else {
@@ -207,7 +207,7 @@ outer:
 				// Simple Begin only matches
 				if v.End == nil {
 					if len(c.ClassName) > 0 {
-						h.addHighlight(c.ClassName, start, start+beginIndex[1])
+						h.addHighlight(c.ClassName, start, start+beginIndex[1], c)
 					}
 					start += beginIndex[1]
 					continue
@@ -220,7 +220,7 @@ outer:
 				}
 
 				if len(c.ClassName) > 0 {
-					h.addHighlight(c.ClassName, start, newStart)
+					h.addHighlight(c.ClassName, start, newStart, c)
 				}
 				start = newStart
 				continue outer
@@ -232,12 +232,12 @@ outer:
 	return start, nil
 }
 
-func (h *highlighter) addHighlight(class string, start, end int) {
+func (h *highlighter) addHighlight(class string, start, end int, c *registry.Contains) {
 	h.highlights = append(h.highlights, highlight{
-		start:   start,
-		end:     end,
-		class:   class,
-		content: string(h.code[start:end]),
+		start:    start,
+		end:      end,
+		class:    class,
+		contains: c,
 	})
 }
 

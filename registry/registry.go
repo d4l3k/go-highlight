@@ -2,10 +2,10 @@ package registry
 
 import (
 	"encoding/json"
-	"regexp"
 	"strings"
 	"sync"
 
+	pcre "github.com/gijsbers/go-pcre"
 	"github.com/pkg/errors"
 )
 
@@ -112,7 +112,18 @@ func parseWords(words string) []string {
 	if len(words) == 0 {
 		return nil
 	}
-	return strings.Split(words, " ")
+
+	// Avoid empty strings.
+	var final []string
+	for _, s := range strings.Split(words, " ") {
+		if len(s) == 0 {
+			continue
+		}
+
+		final = append(final, s)
+	}
+
+	return final
 }
 
 // UnmarshalJSON unmarshals.
@@ -138,18 +149,32 @@ type Contains struct {
 	Contains  []*Contains
 	Variants  []*Contains
 
-	Begin          *regexp.Regexp
-	BeginLookahead *regexp.Regexp
-	End            *regexp.Regexp
-	BeginKeywords  []string
-	Keywords       *Keywords
-	ExcludeEnd     bool
-	Relevance      float64
+	Begin         *pcre.Regexp
+	End           *pcre.Regexp
+	BeginKeywords []string
+	Keywords      *Keywords
+	ExcludeEnd    bool
+	Relevance     float64
+}
+
+func compileRegex(regex string, flags int) (*pcre.Regexp, error) {
+	if len(regex) == 0 {
+		return nil, nil
+	}
+
+	r, err := pcre.CompileJIT(regex, flags, 0)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
 }
 
 // UnmarshalJSON unmarshals.
 func (c *Contains) UnmarshalJSON(b []byte) error {
-	var con containsJSON
+	con := containsJSON{
+		Relevance: 1,
+	}
+
 	err := json.Unmarshal(b, &con)
 	if err != nil {
 		return errors.Wrapf(err, "Contains UnmarshalJSON(%s)", b)
@@ -166,27 +191,16 @@ func (c *Contains) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	if len(con.Begin) > 0 {
-		c.Begin, err = regexp.Compile(con.Begin)
-		if err != nil {
-			return err
-		}
+	c.Begin, err = compileRegex(con.Begin, 0)
+	if err != nil {
+		return err
 	}
 
-	if len(con.BeginLookahead) > 0 {
-		c.BeginLookahead, err = regexp.Compile(con.BeginLookahead)
-		if err != nil {
-			return err
-		}
-	}
-
-	if len(con.End) > 0 {
-		// Regex needs to be in multi line mode and match starting at the
-		// beginning of the string.
-		c.End, err = regexp.Compile(`(?m:` + con.End + `)`)
-		if err != nil {
-			return err
-		}
+	// Regex needs to be in multi line mode and match starting at the
+	// beginning of the string.
+	c.End, err = compileRegex(con.End, pcre.MULTILINE)
+	if err != nil {
+		return err
 	}
 
 	c.BeginKeywords = parseWords(con.BeginKeywords)
