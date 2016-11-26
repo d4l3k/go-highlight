@@ -4,3 +4,8 @@ go:
   - 1.7.3
   - master
 
+addons:
+  apt:
+    packages:
+      - pkg-config
+      - libpcre3-dev
