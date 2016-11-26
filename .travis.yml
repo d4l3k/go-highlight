@@ -8,4 +8,4 @@ addons:
   apt:
     packages:
       - pkg-config
-      - libpcre3-dev
+      - libpcrecpp0
