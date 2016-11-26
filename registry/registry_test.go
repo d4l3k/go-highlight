@@ -18,8 +18,9 @@ func TestRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectedLang := Language{
-		Aliases: []string{"test"},
+	expectedLang := Contains{
+		Aliases:   []string{"test"},
+		Relevance: 1,
 	}
 	if !reflect.DeepEqual(lang, expectedLang) {
 		t.Fatalf("Lookup(%q) = %+v; not %+v", name, lang, expectedLang)

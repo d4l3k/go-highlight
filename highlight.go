@@ -60,7 +60,7 @@ func parseKeywords(kw *registry.Keywords) map[string][]string {
 type highlighter struct {
 	langName   string
 	code       []byte
-	lang       registry.Language
+	lang       registry.Contains
 	highlights []highlight
 	basics     map[string][]string
 

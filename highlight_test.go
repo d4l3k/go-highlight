@@ -132,7 +132,7 @@ func TestLanguages(t *testing.T) {
 	for _, lang := range registry.Languages() {
 		_, err := highlightTest(lang, []byte(code))
 		if err != nil {
-			t.Errorf("%s: error: %+v", lang, err)
+			t.Errorf("%s: error: %v", lang, err)
 		}
 	}
 }

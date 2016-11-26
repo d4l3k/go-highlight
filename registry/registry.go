@@ -2,6 +2,8 @@ package registry
 
 import (
 	"encoding/json"
+	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -13,11 +15,11 @@ var languagesMu = struct {
 	sync.RWMutex
 
 	defs  map[string]*unparsedLanguage
-	cache map[string]Language
+	cache map[string]Contains
 	names []string
 }{
 	defs:  map[string]*unparsedLanguage{},
-	cache: map[string]Language{},
+	cache: map[string]Contains{},
 }
 
 // Register registers a specific language with the highlighter.
@@ -51,46 +53,29 @@ type unparsedLanguage struct {
 	body    string
 }
 
-// Language represents a language definition.
-type Language struct {
-	CaseInsensitive bool        `json:"case_insensitive"`
-	Aliases         []string    `json:"aliases"`
-	Keywords        *Keywords   `json:"keywords"`
-	Illegal         string      `json:"illegal"`
-	Contains        []*Contains `json:"contains"`
-}
-
 type keywordsJSON struct {
 	Keyword string `json:"keyword"`
 	Literal string `json:"literal"`
 	BuiltIn string `json:"built_in"`
 }
 
-func parseContainsRaw(parent *Contains, cs []json.RawMessage) ([]*Contains, error) {
-	final := make([]*Contains, len(cs))
-	for i, cm := range cs {
-		var c Contains
-		if err := json.Unmarshal(cm, &c); err != nil {
-			var s string
-			if err2 := json.Unmarshal(cm, &s); err2 != nil {
-				return nil, errors.Wrap(err, err.Error())
-			}
-			if s == "self" {
-				final[i] = parent
-				continue
-			} else {
-				return nil, err
-			}
-		}
-		final[i] = &c
+// arrayToUpper capitalizes all elements in the array.
+func arrayToUpper(parts []string) []string {
+	for i, part := range parts {
+		parts[i] = strings.ToUpper(part[0:1]) + part[1:]
 	}
-	return final, nil
+	return parts
 }
 
 type containsJSON struct {
-	ClassName string            `json:"className"`
-	Contains  []json.RawMessage `json:"contains"`
-	Variants  []json.RawMessage `json:"variants"`
+	CaseInsensitive bool     `json:"case_insensitive"`
+	Aliases         []string `json:"aliases"`
+	Illegal         string   `json:"illegal"`
+
+	ClassName string      `json:"className"`
+	Contains  []*Contains `json:"contains"`
+	Variants  []*Contains `json:"variants"`
+	Starts    *Contains   `json:"starts"`
 
 	Begin          string    `json:"begin"`
 	BeginLookahead string    `json:"beginLookahead"`
@@ -99,6 +84,11 @@ type containsJSON struct {
 	Keywords       *Keywords `json:"keywords"`
 	ExcludeEnd     bool      `json:"excludeEnd"`
 	Relevance      float64   `json:"relevance"`
+
+	// Ref and IsArray are used for resolving circular references within the
+	// definitions.
+	Ref     []string
+	IsArray bool
 }
 
 // Keywords represents a set of keywords that should be matched and highlighted.
@@ -145,9 +135,14 @@ func (k *Keywords) UnmarshalJSON(b []byte) error {
 
 // Contains represents a subsection that can match different parts of the code.
 type Contains struct {
+	CaseInsensitive bool
+	Aliases         []string
+	Illegal         string
+
 	ClassName string
 	Contains  []*Contains
 	Variants  []*Contains
+	Starts    *Contains
 
 	Begin         *pcre.Regexp
 	End           *pcre.Regexp
@@ -155,6 +150,11 @@ type Contains struct {
 	Keywords      *Keywords
 	ExcludeEnd    bool
 	Relevance     float64
+
+	// Ref and IsArray are used for resolving circular references within the
+	// definitions.
+	Ref     []string
+	IsArray bool
 }
 
 func compileRegex(regex string, flags int) (*pcre.Regexp, error) {
@@ -180,16 +180,13 @@ func (c *Contains) UnmarshalJSON(b []byte) error {
 		return errors.Wrapf(err, "Contains UnmarshalJSON(%s)", b)
 	}
 
+	c.CaseInsensitive = con.CaseInsensitive
+	c.Aliases = con.Aliases
+	c.Illegal = con.Illegal
 	c.ClassName = con.ClassName
-
-	c.Contains, err = parseContainsRaw(c, con.Contains)
-	if err != nil {
-		return err
-	}
-	c.Variants, err = parseContainsRaw(c, con.Variants)
-	if err != nil {
-		return err
-	}
+	c.Contains = con.Contains
+	c.Variants = con.Variants
+	c.Starts = con.Starts
 
 	c.Begin, err = compileRegex(con.Begin, 0)
 	if err != nil {
@@ -208,15 +205,82 @@ func (c *Contains) UnmarshalJSON(b []byte) error {
 	c.ExcludeEnd = con.ExcludeEnd
 	c.Relevance = con.Relevance
 
+	c.Ref = arrayToUpper(con.Ref)
+	c.IsArray = con.IsArray
+
 	return nil
 }
 
-func parseLang(def string) (Language, error) {
-	var lang Language
+func parseLang(def string) (Contains, error) {
+	lang := &Contains{}
 	if err := json.Unmarshal([]byte(def), &lang); err != nil {
-		return Language{}, err
+		return Contains{}, err
 	}
-	return lang, nil
+
+	visited := map[*Contains]struct{}{}
+	if err := lang.resolveReferences(visited, lang); err != nil {
+		return Contains{}, err
+	}
+
+	return *lang, nil
+}
+
+func (c *Contains) resolveReferences(visited map[*Contains]struct{}, n *Contains) error {
+	// Detect circular references.
+	if _, ok := visited[n]; ok {
+		return nil
+	}
+	visited[n] = struct{}{}
+
+	for _, nc := range []*[]*Contains{&n.Contains, &n.Variants} {
+		if err := c.resolveReferencesArr(visited, nc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Contains) resolveReferencesArr(visited map[*Contains]struct{}, n *[]*Contains) error {
+	for i, inner := range *n {
+		if inner.Ref == nil {
+			if err := c.resolveReferences(visited, inner); err != nil {
+				return err
+			}
+			continue
+		}
+
+		v, err := c.resolveReferencePath(inner.Ref)
+		if err != nil {
+			return err
+		}
+		if inner.IsArray {
+			*n = v.([]*Contains)
+		} else {
+			(*n)[i] = v.(*Contains)
+		}
+	}
+
+	return nil
+}
+
+func (c *Contains) resolveReferencePath(ref []string) (interface{}, error) {
+	v := reflect.ValueOf(c)
+	for len(ref) > 0 {
+		r := ref[0]
+		kind := v.Type().Kind()
+		if kind == reflect.Slice || kind == reflect.Array {
+			n, err := strconv.Atoi(r)
+			if err != nil {
+				return nil, err
+			}
+			v = v.Index(n)
+		} else {
+			v = v.Elem().FieldByName(r)
+		}
+		ref = ref[1:]
+	}
+
+	return v.Interface(), nil
 }
 
 // ErrLanguageNotFound is returned when a requested language is not present in
@@ -225,7 +289,7 @@ var ErrLanguageNotFound = errors.New("can't find language in registry")
 
 // Lookup finds and returns the parsed Language that has been saved in the
 // registry.
-func Lookup(name string) (Language, error) {
+func Lookup(name string) (Contains, error) {
 	languagesMu.RLock()
 	lang, ok := languagesMu.cache[name]
 	if ok {
@@ -235,12 +299,12 @@ func Lookup(name string) (Language, error) {
 	langDef, ok := languagesMu.defs[name]
 	languagesMu.RUnlock()
 	if !ok {
-		return Language{}, ErrLanguageNotFound
+		return Contains{}, ErrLanguageNotFound
 	}
 
 	lang, err := parseLang(langDef.body)
 	if err != nil {
-		return Language{}, errors.Wrapf(err, "failed to parse %s", name)
+		return Contains{}, errors.Wrapf(err, "failed to parse %s", name)
 	}
 
 	languagesMu.Lock()
