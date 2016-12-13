@@ -2,6 +2,7 @@ package registry
 
 import (
 	"encoding/json"
+	"log"
 	"reflect"
 	"strconv"
 	"strings"
@@ -162,9 +163,12 @@ func compileRegex(regex string, flags int) (*pcre.Regexp, error) {
 		return nil, nil
 	}
 
-	r, err := pcre.CompileJIT(regex, flags, 0)
+	r, err := pcre.Compile(regex, flags)
 	if err != nil {
 		return nil, err
+	}
+	if err := r.Study(0); err != nil {
+		log.Printf("WARN: failed to JIT regex %q", regex, err)
 	}
 	return &r, nil
 }
