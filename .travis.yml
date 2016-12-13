@@ -1,4 +1,7 @@
 language: go
+sudo: required
+dist: trusty
+
 
 go:
   - 1.7.3
@@ -8,4 +11,5 @@ addons:
   apt:
     packages:
       - pkg-config
-      - libpcrecpp0
+      - libpcre++0
+      - libpcre++-dev
