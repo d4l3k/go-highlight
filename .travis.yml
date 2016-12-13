@@ -9,6 +9,9 @@ go:
 
 addons:
   apt:
+    sources:
+      sourceline: "deb http://archive.ubuntu.com/ubuntu xenial universe multiverse"
+      sourceline: "deb-src http://archive.ubuntu.com/ubuntu xenial universe multiverse"
     packages:
       - pkg-config
       - libpcre++0
