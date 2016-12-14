@@ -1,6 +1,7 @@
 package highlight
 
 import (
+	"log"
 	"sync"
 
 	"github.com/d4l3k/go-highlight/registry"
@@ -36,15 +37,10 @@ func Detect(code []byte) (string, error) {
 				result := result{l, 0, err}
 
 				for _, h := range h.highlights {
-					if h.start == h.end {
-						continue
+					if l == "apache" || l == "xml" {
+						log.Printf("contains %q, rel %f", h.class, h.contains.Relevance)
 					}
-
-					if h.contains != nil {
-						result.score += h.contains.Relevance
-					} else {
-						result.score++
-					}
+					result.score += h.contains.Relevance
 				}
 
 				resultChan <- result
@@ -65,6 +61,10 @@ func Detect(code []byte) (string, error) {
 		if res.err != nil {
 			err = res.err
 			continue
+		}
+
+		if res.lang == "apache" || res.lang == "xml" {
+			log.Printf("lang %q, score %f", res.lang, res.score)
 		}
 
 		if res.score > bestLangVal {

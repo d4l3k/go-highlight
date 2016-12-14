@@ -108,13 +108,13 @@ func isWord(a byte) bool {
 	return b == '_' || unicode.IsLetter(b) || unicode.IsNumber(b)
 }
 
-func (h *highlighter) matchKeywords(start *int, view []byte, typ string, words []string) (bool, error) {
+func (h *highlighter) matchKeywords(start *int, view []byte, typ string, words []string, c *registry.Contains) (bool, error) {
 	word, matched, err := h.wordsMatch(view, words)
 	if err != nil {
 		return false, err
 	}
 	if matched {
-		h.addHighlight(typ, *start, *start+len(word), nil)
+		h.addHighlight(typ, *start, *start+len(word), c)
 		*start += len(word)
 		return true, nil
 	}
@@ -160,25 +160,28 @@ outer:
 			}
 		}
 
+		if root && isWordBoundary {
+			for typ, words := range h.basics {
+				cont, err := h.matchKeywords(&start, view, typ, words, &h.lang)
+				if err != nil {
+					return 0, err
+				}
+				if cont {
+					continue outer
+				}
+			}
+		}
+
 		for _, c := range mode {
 			// Highlight basic keywords, literals and built_ins.
 			if isWordBoundary {
-				keywords := []map[string][]string{}
-				if c.Keywords != nil {
-					keywords = append(keywords, parseKeywords(c.Keywords))
-				}
-				if root {
-					keywords = append(keywords, h.basics)
-				}
-				for _, kw := range keywords {
-					for typ, words := range kw {
-						cont, err := h.matchKeywords(&start, view, typ, words)
-						if err != nil {
-							return 0, err
-						}
-						if cont {
-							continue outer
-						}
+				for typ, words := range parseKeywords(c.Keywords) {
+					cont, err := h.matchKeywords(&start, view, typ, words, c)
+					if err != nil {
+						return 0, err
+					}
+					if cont {
+						continue outer
 					}
 				}
 			}
@@ -193,7 +196,7 @@ outer:
 						return 0, err
 					}
 					if matched {
-						h.addHighlight("keyword", start, start+len(word), nil)
+						h.addHighlight("keyword", start, start+len(word), v)
 						beginIndex = []int{0, len(word)}
 					}
 				} else {
