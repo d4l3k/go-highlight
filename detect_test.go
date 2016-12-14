@@ -34,7 +34,11 @@ func main() {
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Errorf("%d. Detect(%q) = %q; not %q;\n%s", i, c.code, lang, c.lang, highlighted)
+			highlightedCorrect, err := highlightTest(c.lang, code)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Errorf("%d. Detect(%q) = %q; not %q;\n%s\n\n%s", i, c.code, lang, c.lang, highlighted, highlightedCorrect)
 		}
 	}
 }

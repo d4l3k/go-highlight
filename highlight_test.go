@@ -137,6 +137,19 @@ func TestLanguages(t *testing.T) {
 	}
 }
 
+func TestEmptyHighlights(t *testing.T) {
+	cases := []highlightCase{
+		{
+			`<head><!-- foo --></head>`,
+			`<section><head></section><section><!-- foo --></section><section></head></section>`,
+		},
+	}
+
+	for _, lang := range []string{"apache"} {
+		testCases(t, lang, cases)
+	}
+}
+
 func BenchmarkHighlight(b *testing.B) {
 	n := []int{10, 100, 1000, 10000, 100000, 1000000}
 
