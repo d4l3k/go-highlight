@@ -276,8 +276,10 @@ func (h *highlighter) render(w io.Writer, f func(w io.Writer, class string, body
 				if max.Len() > 1 {
 					class = oldMax.class
 				}
-				f(w, class, h.code[i:p.i])
-				i = p.i
+				if class != p.class {
+					f(w, class, h.code[i:p.i])
+					i = p.i
+				}
 			}
 		} else {
 			oldMax := max.Peek()

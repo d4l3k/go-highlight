@@ -168,7 +168,7 @@ func compileRegex(regex string, flags int) (*pcre.Regexp, error) {
 		return nil, err
 	}
 	if err := r.Study(0); err != nil {
-		log.Printf("WARN: failed to JIT regex %q", regex, err)
+		log.Printf("WARN: failed to JIT regex %q: %s", regex, err)
 	}
 	return &r, nil
 }
