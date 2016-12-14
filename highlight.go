@@ -10,6 +10,7 @@ import (
 
 	"github.com/d4l3k/go-highlight/registry"
 	pcre "github.com/gijsbers/go-pcre"
+	"github.com/pkg/errors"
 
 	// Import for language registration side-effect.
 	_ "github.com/d4l3k/go-highlight/languages"
@@ -122,7 +123,7 @@ func (h *highlighter) matchKeywords(start *int, view []byte, typ string, words [
 }
 
 // findIndex uses the index cache to avoid doing numerous regex lookups.
-func (h *highlighter) findIndex(r *pcre.Regexp, view []byte, start int) []int {
+func (h *highlighter) findIndex(r *pcre.Regexp, start int) []int {
 	idx, ok := h.indexCache[r]
 	if ok {
 		if idx == nil {
@@ -131,7 +132,7 @@ func (h *highlighter) findIndex(r *pcre.Regexp, view []byte, start int) []int {
 			return []int{idx[0] - start, idx[1] - start}
 		}
 	}
-	idx = r.FindIndex(view, 0)
+	idx = r.FindIndex(h.code[start:], 0)
 	if idx == nil {
 		h.indexCache[r] = nil
 	} else {
@@ -154,9 +155,9 @@ outer:
 
 		// Check for the end of the previous section.
 		if end != nil {
-			index := h.findIndex(end, view, start)
+			index := h.findIndex(end, start)
 			if index != nil && index[0] == 0 {
-				return start + index[1], nil
+				return start, nil
 			}
 		}
 
@@ -189,7 +190,7 @@ outer:
 			for _, v := range append([]*registry.Contains{c}, c.Variants...) {
 				var beginIndex []int
 				if v.Begin != nil && len(c.ClassName) > 0 {
-					beginIndex = h.findIndex(v.Begin, view, start)
+					beginIndex = h.findIndex(v.Begin, start)
 				} else if isWordBoundary && len(v.BeginKeywords) > 0 {
 					word, matched, err := h.wordsMatch(view, v.BeginKeywords)
 					if err != nil {
@@ -221,11 +222,52 @@ outer:
 				if err != nil {
 					return 0, err
 				}
+				index := h.findIndex(v.End, newStart)
+				if index != nil && index[0] == 0 {
+					newStart += index[1]
+				}
 
 				if len(c.ClassName) > 0 {
 					h.addHighlight(c.ClassName, start, newStart, c)
 				}
 				start = newStart
+
+				// TODO(d4l3k): Handle the case where SubLanguage is empty.
+				if v.Starts != nil && len(v.Starts.SubLanguage) > 0 {
+					languages := v.Starts.SubLanguage
+					if languages[0] == "all" {
+						languages = registry.Languages()
+					}
+					code := h.code[start:]
+
+					language := languages[0]
+					if len(languages) > 1 {
+						var err error
+						language, err = detect(code, languages, v.Starts.End)
+						if err != nil {
+							return 0, err
+						}
+					}
+
+					// If a language is detected, highlight it.
+					if len(language) > 0 {
+						h2, err := makeHighlighter(language, code)
+						if err != nil {
+							return 0, errors.Wrapf(err, "parent lang %q", h.langName)
+						}
+						i, err := h2.highlight(h2.lang.Contains, 0, v.Starts.End)
+						if err != nil {
+							return 0, err
+						}
+						h.mergeHighlights(h2, start)
+						start += i
+					} else {
+						index := h.findIndex(v.Starts.End, newStart)
+						if index != nil && index[0] == 0 {
+							start += index[1]
+						}
+					}
+				}
 				continue outer
 			}
 
@@ -244,19 +286,27 @@ func (h *highlighter) addHighlight(class string, start, end int, c *registry.Con
 	})
 }
 
+func (h *highlighter) mergeHighlights(h2 highlighter, offset int) {
+	for _, high := range h2.highlights {
+		h.addHighlight(high.class, high.start+offset, high.end+offset, high.contains)
+	}
+}
+
 // toPOI returns a slice of poi elements sorted according to i and then start
 func (h *highlighter) toPOI() []poi {
 	pois := make([]poi, len(h.highlights)*2)
 	for i, h := range h.highlights {
 		pois[i*2] = poi{
-			i:     h.start,
-			start: true,
-			class: h.class,
+			i:         h.start,
+			start:     true,
+			class:     h.class,
+			highlight: &h,
 		}
 		pois[i*2+1] = poi{
-			i:     h.end,
-			start: false,
-			class: h.class,
+			i:         h.end,
+			start:     false,
+			class:     h.class,
+			highlight: &h,
 		}
 	}
 	sort.Sort(sort.Reverse(poiHeap(pois)))
@@ -289,8 +339,8 @@ func (h *highlighter) render(w io.Writer, f func(w io.Writer, class string, body
 			if oldMax.class == p.class {
 				f(w, p.class, h.code[i:p.i])
 				i = p.i
-				heap.Pop(max)
 			}
+			max.Remove(p)
 		}
 	}
 	f(w, "", h.code[i:])

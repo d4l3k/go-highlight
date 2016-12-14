@@ -39,6 +39,14 @@ function cleanRegex(obj, parents, path) {
       obj[prop] = ".^";
     }
 
+    if (prop == "subLanguage") {
+      if (typeof val === "string") {
+        obj[prop] = [val];
+      } else if (val.length === 0) {
+        obj[prop] = ["all"];
+      }
+    }
+
     // Need to call JSON.parse to correctly parse unicode escape sequences in
     // the regexps.
     let regexp = obj[prop];

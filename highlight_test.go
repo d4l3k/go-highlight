@@ -145,9 +145,39 @@ func TestEmptyHighlights(t *testing.T) {
 		},
 	}
 
-	for _, lang := range []string{"apache"} {
-		testCases(t, lang, cases)
+	testCases(t, "apache", cases)
+}
+
+func TestSubLanguage(t *testing.T) {
+	// We want to first test that the standalone behavior is correct.
+	casesJS := []highlightCase{
+		{
+			`
+				"use strict";
+				const foo = 10;
+      `,
+			`<meta>
+				"use strict"</meta>;
+				<keyword>const</keyword> foo = <number>10</number>;
+      `,
+		},
 	}
+	testCases(t, "javascript", casesJS)
+
+	// Then test that the behavior is the same when a sub language.
+	casesHTML := []highlightCase{
+		{
+			`<script>
+				"use strict";
+				const foo = 10;
+			</script>`,
+			`<tag><script></tag><meta>
+				"use strict"</meta>;
+				<keyword>const</keyword> foo = <number>10</number>;
+			<tag></script></tag>`,
+		},
+	}
+	testCases(t, "html", casesHTML)
 }
 
 func BenchmarkHighlight(b *testing.B) {

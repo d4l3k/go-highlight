@@ -73,10 +73,11 @@ type containsJSON struct {
 	Aliases         []string `json:"aliases"`
 	Illegal         string   `json:"illegal"`
 
-	ClassName string      `json:"className"`
-	Contains  []*Contains `json:"contains"`
-	Variants  []*Contains `json:"variants"`
-	Starts    *Contains   `json:"starts"`
+	ClassName   string      `json:"className"`
+	Contains    []*Contains `json:"contains"`
+	Variants    []*Contains `json:"variants"`
+	Starts      *Contains   `json:"starts"`
+	SubLanguage []string    `json:"subLanguage"`
 
 	Begin          string    `json:"begin"`
 	BeginLookahead string    `json:"beginLookahead"`
@@ -140,10 +141,11 @@ type Contains struct {
 	Aliases         []string
 	Illegal         string
 
-	ClassName string
-	Contains  []*Contains
-	Variants  []*Contains
-	Starts    *Contains
+	ClassName   string
+	Contains    []*Contains
+	Variants    []*Contains
+	Starts      *Contains
+	SubLanguage []string
 
 	Begin         *pcre.Regexp
 	End           *pcre.Regexp
@@ -191,6 +193,7 @@ func (c *Contains) UnmarshalJSON(b []byte) error {
 	c.Contains = con.Contains
 	c.Variants = con.Variants
 	c.Starts = con.Starts
+	c.SubLanguage = con.SubLanguage
 
 	c.Begin, err = compileRegex(con.Begin, 0)
 	if err != nil {
@@ -303,7 +306,7 @@ func Lookup(name string) (Contains, error) {
 	langDef, ok := languagesMu.defs[name]
 	languagesMu.RUnlock()
 	if !ok {
-		return Contains{}, ErrLanguageNotFound
+		return Contains{}, errors.Wrap(ErrLanguageNotFound, name)
 	}
 
 	lang, err := parseLang(langDef.body)
