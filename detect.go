@@ -36,15 +36,7 @@ func Detect(code []byte) (string, error) {
 				result := result{l, 0, err}
 
 				for _, h := range h.highlights {
-					if h.start == h.end {
-						continue
-					}
-
-					if h.contains != nil {
-						result.score += h.contains.Relevance
-					} else {
-						result.score++
-					}
+					result.score += h.contains.Relevance
 				}
 
 				resultChan <- result
