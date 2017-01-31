@@ -17,6 +17,6 @@
   },
   "homepage": "https://github.com/d4l3k/go-highlight#readme",
   "dependencies": {
-    "highlight.js": "^9.8.0"
+    "highlight.js": "^9.9.0"
   }
 }
